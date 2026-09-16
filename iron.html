@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Iron Man Flight Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin: 5px 0;
+            font-size: 24px;
+            color: #ffd700;
+            text-shadow: 0 0 10px #ff4500;
+        }
+
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(255, 69, 0, 0.6);
+            border: 3px solid #ffd700;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #1a2a6c, #b21f1f, #fdbb2d);
+        }
+
+        .instructions {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #ccc;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>IRON MAN: SKY ESCAPE</h1>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+    <div class="instructions">
+        Use <b>Up/Down Arrows</b> (or W/S) to fly. Avoid Missiles! Collect Energy Cores (Blue).
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state variables
+        let gameStarted = false;
+        let gameOver = false;
+        let score = 0;
+        let highScore = 0;
+
+        // Iron Man object
+        const ironMan = {
+            x: 80,
+            y: canvas.height / 2 - 20,
+            width: 45,
+            height: 30,
+            speed: 6,
+            dy: 0
+        };
+
+        let obstacles = [];
+        let items = [];
+        let clouds = [];
+
+        // Input tracking
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if ((e.code === 'Space' || e.code === 'ArrowUp') && !gameStarted) {
+                startGame();
+            }
+            if (e.code === 'KeyR' && gameOver) {
+                resetGame();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // Touch support for mobile
+        canvas.addEventListener('touchmove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const touchY = e.touches[0].clientY - rect.top;
+            ironMan.y = touchY - ironMan.height / 2;
+            e.preventDefault();
+            if (!gameStarted) startGame();
+        }, { passive: false });
+
+        canvas.addEventListener('click', () => {
+            if (!gameStarted) startGame();
+            if (gameOver) resetGame();
+        });
+
+        function startGame() {
+            gameStarted = true;
+        }
+
+        function resetGame() {
+            gameOver = false;
+            gameStarted = true;
+            score = 0;
+            obstacles = [];
+            items = [];
+            ironMan.y = canvas.height / 2 - 15;
+        }
+
+        // Initialize background clouds
+        for (let i = 0; i < 5; i++) {
+            clouds.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                width: 60 + Math.random() * 40,
+                speed: 1 + Math.random() * 1.5
+            });
+        }
+
+        // Spawn obstacles (Missiles)
+        function spawnObstacles() {
+            if (Math.random() < 0.022) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 40),
+                    width: 40,
+                    height: 15,
+                    speed: 5 + Math.random() * 3
+                });
+            }
+        }
+
+        // Spawn collectibles (Energy Cores)
+        function spawnItems() {
+            if (Math.random() < 0.018) {
+                items.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - 30),
+                    radius: 12,
+                    speed: 4
+                });
+            }
+        }
+
+        function update() {
+            if (!gameStarted || gameOver) return;
+
+            // Move Iron Man via keyboard
+            if (keys['ArrowUp'] || keys['KeyW']) {
+                ironMan.y -= ironMan.speed;
+            }
+            if (keys['ArrowDown'] || keys['KeyS']) {
+                ironMan.y += ironMan.speed;
+            }
+
+            // Boundary constraints
+            if (ironMan.y < 0) ironMan.y = 0;
+            if (ironMan.y > canvas.height - ironMan.height) {
+                ironMan.y = canvas.height - ironMan.height;
+            }
+
+            // Update clouds
+            clouds.forEach(cloud => {
+                cloud.x -= cloud.speed;
+                if (cloud.x < -cloud.width) {
+                    cloud.x = canvas.width + cloud.width;
+                    cloud.y = Math.random() * canvas.height;
+                }
+            });
+
+            // Update Obstacles
+            spawnObstacles();
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= obstacles[i].speed;
+
+                // Collision Detection with Iron Man
+                if (
+                    ironMan.x < obstacles[i].x + obstacles[i].width &&
+                    ironMan.x + ironMan.width > obstacles[i].x &&
+                    ironMan.y < obstacles[i].y + obstacles[i].height &&
+                    ironMan.y + ironMan.height > obstacles[i].y
+                ) {
+                    gameOver = true;
+                    if (score > highScore) highScore = score;
+                }
+
+                // Remove off-screen obstacles & add score
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    score += 10;
+                }
+            }
+
+            // Update Collectibles
+            spawnItems();
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].x -= items[i].speed;
+
+                // Collision Detection with Energy Core
+                const distX = ironMan.x + ironMan.width / 2 - items[i].x;
+                const distY = ironMan.y + ironMan.height / 2 - items[i].y;
+                const distance = Math.sqrt(distX * distX + distY * distY);
+
+                if (distance < ironMan.height / 2 + items[i].radius) {
+                    score += 50; // Bonus points
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                // Remove off-screen items
+                if (items[i].x + items[i].radius < 0) {
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        function drawIronMan(x, y) {
+            // Repulsors / Thruster glow
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(x - 5, y + 15, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main Body (Red Armor)
+            ctx.fillStyle = '#cc0000';
+            ctx.fillRect(x, y + 5, 30, 20);
+
+            // Gold Helmet & Chest Plate accents
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillRect(x + 20, y + 5, 12, 12); // Helmet
+            ctx.fillRect(x + 10, y + 10, 10, 10); // Chest plating
+
+            // Arc Reactor Glow
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(x + 15, y + 15, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Thruster fire trail behind
+            ctx.fillStyle = '#ff4500';
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10);
+            ctx.lineTo(x - 15, y + 15);
+            ctx.lineTo(x, y + 20);
+            ctx.fill();
+        }
+
+        function draw() {
+            // Clear screen
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Clouds
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 15, cloud.y - 10, cloud.width / 4, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 30, cloud.y, cloud.width / 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw Iron Man
+            drawIronMan(ironMan.x, ironMan.y);
+
+            // Draw Obstacles (Missiles)
+            obstacles.forEach(obs => {
+                ctx.fillStyle = '#666';
+                ctx.fillRect(obs.x, obs.y + 4, obs.width - 10, obs.height - 8); // Missile body
+                
+                // Missile head
+                ctx.fillStyle = '#silver';
+                ctx.beginPath();
+                ctx.moveTo(obs.x + obs.width, obs.y + obs.height / 2);
+                ctx.lineTo(obs.x + obs.width - 10, obs.y);
+                ctx.lineTo(obs.x + obs.width - 10, obs.y + obs.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // Fire flame on missile tail
+                ctx.fillStyle = '#ff4500';
+                ctx.fillRect(obs.x - 8, obs.y + 5, 8, 5);
+            });
+
+            // Draw Collectibles (Energy Cores)
+            items.forEach(item => {
+                ctx.fillStyle = '#00ffff';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset shadow
+            });
+
+            // Draw Score UI
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 18px Arial';
+            ctx.fillText(`Score: ${score}`, 20, 30);
+            ctx.fillText(`High Score: ${highScore}`, 20, 55);
+
+            // Start Screen Overlay
+            if (!gameStarted) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ffd700';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('IRON MAN: SKY ESCAPE', canvas.width / 2, canvas.height / 2 - 30);
+
+                ctx.fillStyle = 'white';
+                ctx.font = '18px Arial';
+                ctx.fillText('Press UP ARROW, W, or TAP to Start', canvas.width / 2, canvas.height / 2 + 20);
+                ctx.textAlign = 'left'; // reset align
+            }
+
+            // Game Over Overlay
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ff3333';
+                ctx.font = 'bold 36px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('MISSION FAILED', canvas.width / 2, canvas.height / 2 - 30);
+
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText('Press R or Click to Restart', canvas.width / 2, canvas.height / 2 + 45);
+                ctx.textAlign = 'left'; // reset align
+            }
+        }
+
+        // Game Loop
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
